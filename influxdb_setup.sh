@@ -1,6 +1,7 @@
 #!/bin/bash
 #set -e; Breaks on Mac :-(
 set -u;
+set -x;
 
 function influx_remove_dir()
 {
@@ -84,10 +85,28 @@ function influx_count_processes()
 	fi;
 }
 
+function influx_run_q()
+{
+	PORT=$1;
+	COMMAND=$2;
+	influx --port ${PORT} --execute "$COMMAND";
+}
+
+function influx_admin_user()
+{
+	echo $(openssl rand -base64 8) > "${HOME}/rhys_influxdb/admin_pwd.txt";
+	PASS=$(cat "${HOME}/rhys_influxdb/admin_pwd.txt");
+	PASS='"'"'$PASS'"'"'
+	INFLUX_CMD="CREATE USER admin WITH PASSWORD $PASS WITH ALL PRIVILEGES";
+	influx_run_q 8086 "$INFLUX_CMD" && influx_run_q 8087 "$INFLUX_CMD";
+}
+
 function influx_setup_cluster()
 {
 	influx_mkdir && echo "Created cluster directory."
 	influx_config1 && influx_config2 && echo "Created configuration files";
 	influx_launch_nodes && echo "Launched nodes";
 	influx_count_processes && echo "Verified correct number of influxd processes running (2).";
+	influx_admin_user && echo "Created admin user on both nodes.";
+	set +x;
 }
