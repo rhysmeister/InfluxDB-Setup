@@ -38,7 +38,7 @@ bind-address = ":8088"
 [http]
   enabled = true
   bind-address = ":8086"
-  auth-enabled = true  
+  auth-enabled = false  
 EOF
 }
 
@@ -56,7 +56,7 @@ bind-address = ":8089"
 [http]
   enabled = true
   bind-address = ":8087"
-  auth-enabled = true  
+  auth-enabled = false 
 EOF
 }
 
@@ -160,6 +160,12 @@ function influx_import_file()
 	influx --port 8087 -database test -import -path=/tmp/NOAA_data.txt -precision=s -username admin -password $(cat "${HOME}/rhys_influxdb/admin_pwd.txt");
 }
 
+function influx_http_auth()
+{
+	sed -i.bak 's/auth-enabled = false/auth-enabled = true/' "${HOME}/rhys_influxdb/influxdb1.conf";
+	sed -i.bak 's/auth-enabled = false/auth-enabled = true/' "${HOME}/rhys_influxdb/influxdb2.conf";
+}
+
 function influx_setup_cluster()
 {
 	influx_mkdir && echo "Created cluster directory."
@@ -172,4 +178,6 @@ function influx_setup_cluster()
 	influx_curl_sample_data && echo "Sample data is ready!";
 	influx_import_file && echo "Sample data has been loaded into the NOAA_water_database database.";
 	influx_noaa_db_users && influx_noaa_db_user_perms && echo "Created noaa_ro and noaa_rw users.";
+	influx_http_auth && echo "Enabled http authentication.";
+	influx_kill && influx_launch_nodes && echo "Restarted influx nodes. Logon to node1 with influx -port 8086 -username admin -password \$(cat \"\${HOME}/rhys_influxdb/admin_pwd.txt\")"
 }
