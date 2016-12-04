@@ -1,7 +1,7 @@
 #!/bin/bash
 #set -e; Breaks on Mac :-(
 set -u;
-set -x;
+#set -x;
 
 function influx_remove_dir()
 {
@@ -98,8 +98,66 @@ function influx_admin_user()
 	PASS=$(cat "${HOME}/rhys_influxdb/admin_pwd.txt");
 	INFLUX_CMD="CREATE USER admin WITH PASSWORD '$PASS' WITH ALL PRIVILEGES";
 	sleep 5; # The Influx instance can take a little while to fire up so we wait a little
-	influx_run_q 8086 "$INFLUX_CMD";
-	influx_run_q 8087 "$INFLUX_CMD";
+	influx_run_q 8086 "$INFLUX_CMD" && influx_run_q 8087 "$INFLUX_CMD";
+}
+
+function influx_create_test_db()
+{
+	q="CREATE DATABASE test WITH DURATION 365d NAME duration_365";
+	influx_run_q 8086 "$q" && influx_run_q 8087 "$q";
+}
+
+function influx_test_db_users()
+{
+	echo $(openssl rand -base64 8) > "${HOME}/rhys_influxdb/test_ro_pwd.txt";
+	RO_PASS=$(cat "${HOME}/rhys_influxdb/test_ro_pwd.txt");
+	ro="CREATE USER test_ro WITH PASSWORD '$RO_PASS'";
+	echo $(openssl rand -base64 8) > "${HOME}/rhys_influxdb/test_rw_pwd.txt";
+	RW_PASS=$(cat "${HOME}/rhys_influxdb/test_rw_pwd.txt");
+	rw="CREATE USER test_rw WITH PASSWORD '$RW_PASS'";
+	influx_run_q 8086 "$ro" && influx_run_q 8087 "$ro";
+	influx_run_q 8086 "$rw" && influx_run_q 8087 "$rw";
+}
+
+function influx_test_db_user_perms()
+{
+	ro="GRANT READ ON test TO test_ro";
+	rw="GRANT ALL ON test TO test_rw";
+	influx_run_q 8086 "$ro" && influx_run_q 8087 "$ro";
+	influx_run_q 8086 "$rw" && influx_run_q 8087 "$rw";
+}
+
+function influx_noaa_db_users()
+{
+	echo $(openssl rand -base64 8) > "${HOME}/rhys_influxdb/noaa_ro_pwd.txt";
+	RO_PASS=$(cat "${HOME}/rhys_influxdb/noaa_ro_pwd.txt");
+	ro="CREATE USER noaa_ro WITH PASSWORD '$RO_PASS'";
+	echo $(openssl rand -base64 8) > "${HOME}/rhys_influxdb/noaa_rw_pwd.txt";
+	RW_PASS=$(cat "${HOME}/rhys_influxdb/test_rw_pwd.txt");
+	rw="CREATE USER noaa_rw WITH PASSWORD '$RW_PASS'";
+	influx_run_q 8086 "$ro" && influx_run_q 8087 "$ro";
+	influx_run_q 8086 "$rw" && influx_run_q 8087 "$rw";
+}
+
+function influx_noaa_db_user_perms()
+{
+	ro="GRANT READ ON NOAA_water_database TO noaa_ro";
+	rw="GRANT ALL ON NOAA_water_database TO noaa_rw";
+	influx_run_q 8086 "$ro" && influx_run_q 8087 "$ro";
+	influx_run_q 8086 "$rw" && influx_run_q 8087 "$rw";
+}
+
+function influx_curl_sample_data()
+{
+	if [ ! -f /tmp/NOAA_data.txt ]; then
+		curl https://s3-us-west-1.amazonaws.com/noaa.water.database.0.9/NOAA_data.txt > /tmp/NOAA_data.txt;
+	fi;
+}
+
+function influx_import_file()
+{
+	influx --port 8086 -database test -import -path=/tmp/NOAA_data.txt -precision=s -username admin -password $(cat "${HOME}/rhys_influxdb/admin_pwd.txt");
+	influx --port 8087 -database test -import -path=/tmp/NOAA_data.txt -precision=s -username admin -password $(cat "${HOME}/rhys_influxdb/admin_pwd.txt");
 }
 
 function influx_setup_cluster()
@@ -109,5 +167,9 @@ function influx_setup_cluster()
 	influx_launch_nodes && echo "Launched nodes";
 	influx_count_processes && echo "Verified correct number of influxd processes running (2).";
 	influx_admin_user && echo "Created admin user on both nodes.";
-	set +x;
+	influx_create_test_db && echo "Created test database."
+	influx_test_db_users && influx_test_db_user_perms && echo "Created test_ro and test_rw users.";
+	influx_curl_sample_data && echo "Sample data is ready!";
+	influx_import_file && echo "Sample data has been loaded into the NOAA_water_database database.";
+	influx_noaa_db_users && influx_noaa_db_user_perms && echo "Created noaa_ro and noaa_rw users.";
 }
