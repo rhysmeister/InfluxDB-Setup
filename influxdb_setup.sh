@@ -38,7 +38,7 @@ bind-address = ":8088"
 [http]
   enabled = true
   bind-address = ":8086"
-  auth-enabled = false  
+  auth-enabled = true  
 EOF
 }
 
@@ -56,7 +56,7 @@ bind-address = ":8089"
 [http]
   enabled = true
   bind-address = ":8087"
-  auth-enabled = false  
+  auth-enabled = true  
 EOF
 }
 
