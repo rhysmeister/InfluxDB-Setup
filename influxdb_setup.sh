@@ -27,7 +27,7 @@ function influx_mkdir()
 function influx_config1()
 {
 cat << EOF >> "${HOME}/rhys_influxdb/influxdb1.conf" 
-reporting-disabled = false
+reporting-disabled = true
 bind-address = ":8088"
 
 [meta]
@@ -45,7 +45,7 @@ EOF
 function influx_config2()
 {
 cat << EOF >> "${HOME}/rhys_influxdb/influxdb2.conf" 
-reporting-disabled = false
+reporting-disabled = true
 bind-address = ":8089"
 
 [meta]
@@ -87,18 +87,19 @@ function influx_count_processes()
 
 function influx_run_q()
 {
-	PORT=$1;
-	COMMAND=$2;
-	influx --port ${PORT} --execute "$COMMAND";
+	PORT=${1};
+	COMMAND=${2};
+	influx --port "$PORT" --execute "$COMMAND";
 }
 
 function influx_admin_user()
 {
 	echo $(openssl rand -base64 8) > "${HOME}/rhys_influxdb/admin_pwd.txt";
 	PASS=$(cat "${HOME}/rhys_influxdb/admin_pwd.txt");
-	PASS='"'"'$PASS'"'"'
-	INFLUX_CMD="CREATE USER admin WITH PASSWORD $PASS WITH ALL PRIVILEGES";
-	influx_run_q 8086 "$INFLUX_CMD" && influx_run_q 8087 "$INFLUX_CMD";
+	INFLUX_CMD="CREATE USER admin WITH PASSWORD '$PASS' WITH ALL PRIVILEGES";
+	sleep 5; # The Influx instance can take a little while to fire up so we wait a little
+	influx_run_q 8086 "$INFLUX_CMD";
+	influx_run_q 8087 "$INFLUX_CMD";
 }
 
 function influx_setup_cluster()
