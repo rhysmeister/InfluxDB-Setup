@@ -3,6 +3,14 @@
 set -u;
 #set -x;
 
+GIT_HOME="/Users/rhys1/Documents/github_projects";		# Path to git
+if [ -n "$GOPATH" ]; then
+	GOPATH="/usr/local/go/bin/";
+	if [[ ":$PATH:" == *":/usr/local/go/bin/:"* ]]; then
+		PATH="$PATH:$GOPATH";
+	fi;
+fi;
+
 function influx_remove_dir()
 {
 	rm -Rf "${HOME}/rhys_influxdb/";
@@ -26,7 +34,7 @@ function influx_mkdir()
 
 function influx_config1()
 {
-cat << EOF >> "${HOME}/rhys_influxdb/influxdb1.conf" 
+cat << EOF > "${HOME}/rhys_influxdb/influxdb1.conf" 
 reporting-disabled = true
 bind-address = ":8088"
 
@@ -57,6 +65,44 @@ bind-address = ":8089"
   enabled = true
   bind-address = ":8087"
   auth-enabled = false 
+EOF
+}
+
+function influx_relay_config()
+{
+cat << EOF >> "${HOME}/rhys_influxdb/influxdb-relay.conf"
+[[http]]
+# Name of the HTTP server, used for display purposes only.
+name = "example-http"
+
+# TCP address to bind to, for HTTP server.
+bind-addr = "127.0.0.1:9096"
+
+# Enable HTTPS requests.
+ssl-combined-pem = "/etc/ssl/influxdb-relay.pem"
+
+# Array of InfluxDB instances to use as backends for Relay.
+output = [
+    # name: name of the backend, used for display purposes only.
+    # location: full URL of the /write endpoint of the backend
+    # timeout: Go-parseable time duration. Fail writes if incomplete in this time.
+    # skip-tls-verification: skip verification for HTTPS location. WARNING: it's insecure. Don't use in production.
+    { name="local1", location="http://127.0.0.1:8086/write", timeout="10s", buffer-size-mb=100M },
+    { name="local2", location="http://127.0.0.1:8087/write", timeout="10s", buffer-size-mb=100M },
+]
+
+[[udp]]
+# Name of the UDP server, used for display purposes only.
+name = "example-udp"
+
+# UDP address to bind to.
+bind-addr = "127.0.0.1:9096"
+
+# Socket buffer size for incoming connections.
+read-buffer = 0 # default
+
+# Precision to use for timestamps
+precision = "n" # Can be n, u, ms, s, m, h
 EOF
 }
 
@@ -166,6 +212,18 @@ function influx_http_auth()
 	sed -i.bak 's/auth-enabled = false/auth-enabled = true/' "${HOME}/rhys_influxdb/influxdb2.conf";
 }
 
+function influx_relay_git_clone_pull()
+{
+	MY_DIR=$(pwd);
+	if [ -d "$GIT_HOME/influxdb-relay" ]; then
+		cd "$GIT_HOME" && git pull;
+	else
+		cd "$GIT_HOME";
+		git clone https://github.com/influxdata/influxdb-relay.git
+	fi;
+	cd "$MY_DIR";
+}
+
 function influx_setup_cluster()
 {
 	influx_mkdir && echo "Created cluster directory."
@@ -179,5 +237,6 @@ function influx_setup_cluster()
 	influx_import_file && echo "Sample data has been loaded into the NOAA_water_database database.";
 	influx_noaa_db_users && influx_noaa_db_user_perms && echo "Created noaa_ro and noaa_rw users.";
 	influx_http_auth && echo "Enabled http authentication.";
-	influx_kill && influx_launch_nodes && echo "Restarted influx nodes. Logon to node1 with influx -port 8086 -username admin -password \$(cat \"\${HOME}/rhys_influxdb/admin_pwd.txt\")"
+	influx_kill && influx_launch_nodes && echo "Restarted influx nodes. Logon to node1 with influx -port 8086 -username admin -password \$(cat \"\${HOME}/rhys_influxdb/admin_pwd.txt\")";
+	influx_relay_git_clone_pull && echo "InfluxDB-Relay git action executed.";
 }
